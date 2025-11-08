@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Second Brain OS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- React + ReactDOM -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.development.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
+    ></script>
+
+    <!-- Babel (so we can use JSX inline) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- APP CODE INLINE = no CORS issues -->
+    <script type="text/babel">
+      const { useState, useEffect, useMemo } = React;
+
+      function todayISO() {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d.toISOString().slice(0, 10);
+      }
+
+      function App() {
+        const [activeTab, setActiveTab] = useState("home");
+        const [tasks, setTasks] = useState([
+          {
+            id: 1,
+            title: "Finish physics questions",
+            tag: "Study",
+            due: todayISO(),
+            done: false,
+          },
+          {
+            id: 2,
+            title: "Guitar practice 20 min",
+            tag: "Guitar",
+            due: todayISO(),
+            done: false,
+          },
+          {
+            id: 3,
+            title: "Gym session",
+            tag: "Fitness",
+            due: todayISO(),
+            done: false,
+          },
+        ]);
+        const [quickText, setQuickText] = useState("");
+        const [studySessions, setStudySessions] = useState([]);
+        const [fitnessLogs, setFitnessLogs] = useState([]);
+        const [moneySaved, setMoneySaved] = useState(350);
+        const [moneyTarget] = useState(2000);
+        const [timerSeconds, setTimerSeconds] = useState(25 * 60);
+        const [timerRunning, setTimerRunning] = useState(false);
+        const [menuOpen, setMenuOpen] = useState(false);
+
+        useEffect(() => {
+          if (!timerRunning) return;
+          const id = setInterval(() => {
+            setTimerSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+          }, 1000);
+          return () => clearInterval(id);
+        }, [timerRunning]);
+
+        const tasksToday = useMemo(
+          () => tasks.filter((t) => t.due === todayISO()),
+          [tasks]
+        );
+
+        const studyMinutesToday = useMemo(
+          () =>
+            studySessions
+              .filter((s) => s.date === todayISO())
+              .reduce((sum, s) => sum + s.minutes, 0),
+          [studySessions]
+        );
+
+        const fitnessMinutesToday = useMemo(
+          () =>
+            fitnessLogs
+              .filter((f) => f.date === todayISO())
+              .reduce((sum, f) => sum + f.minutes, 0),
+          [fitnessLogs]
+        );
+
+        function toggleTask(id) {
+          setTasks((prev) =>
+            prev.map((t) =>
+              t.id === id ? { ...t, done: !t.done } : t
+            )
+          );
+        }
+
+        function addQuickTask() {
+          const text = quickText.trim();
+          if (!text) return;
+          setTasks((prev) => [
+            ...prev,
+            {
+              id: Date.now(),
+              title: text,
+              tag: "Inbox",
+              due: todayISO(),
+              done: false,
+            },
+          ]);
+          setQuickText("");
+        }
+
+        function resetTimer() {
+          setTimerSeconds(25 * 60);
+          setTimerRunning(false);
+        }
+
+        function logStudy(subject, minutes) {
+          setStudySessions((prev) => [
+            ...prev,
+            { id: Date.now(), subject, minutes, date: todayISO() },
+          ]);
+        }
+
+        function logFitness(kind, minutes) {
+          setFitnessLogs((prev) => [
+            ...prev,
+            { id: Date.now(), kind, minutes, date: todayISO() },
+          ]);
+        }
+
+        function addMoney(amount) {
+          const value = Number(amount);
+          if (!value || value <= 0) return;
+          setMoneySaved((prev) => prev + value);
+        }
+
+        const screenProps = {
+          tasks,
+          tasksToday,
+          toggleTask,
+          quickText,
+          setQuickText,
+          addQuickTask,
+          timerSeconds,
+          timerRunning,
+          setTimerRunning,
+          resetTimer,
+          studyMinutesToday,
+          fitnessMinutesToday,
+          logStudy,
+          logFitness,
+          moneySaved,
+          moneyTarget,
+          addMoney,
+          studySessions,
+          fitnessLogs,
+        };
+
+        return (
+          <div className="app-bg">
+            <div className="gradient-orb gradient-orb--left" />
+            <div className="gradient-orb gradient-orb--right" />
+            <div className="phone-frame">
+              <TopBar onMenuToggle={() => setMenuOpen((m) => !m)} />
+              <div key={activeTab} className="screen">
+                {activeTab === "home" && <HomeScreen {...screenProps} />}
+                {activeTab === "tasks" && <TasksScreen {...screenProps} />}
+                {activeTab === "focus" && <FocusScreen {...screenProps} />}
+                {activeTab === "life" && <LifeScreen {...screenProps} />}
+              </div>
+              <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+              {menuOpen && (
+                <GlassMenu onClose={() => setMenuOpen(false)} />
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      function TopBar({ onMenuToggle }) {
+        const now = new Date();
+        const time = now.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const date = now.toLocaleDateString([], {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+        });
+
+        return (
+          <header className="topbar">
+            <div className="topbar-left">
+              <div className="avatar">K</div>
+              <div>
+                <div className="topbar-title">Second Brain</div>
+                <div className="topbar-sub">Kai · Personal OS</div>
+              </div>
+            </div>
+            <div className="topbar-right">
+              <div className="chip">
+                <span>{time}</span>
+                <span className="chip-dot">•</span>
+                <span>{date}</span>
+              </div>
+              <button className="icon-btn" onClick={onMenuToggle}>
+                ⋯
+              </button>
+            </div>
+          </header>
+        );
+      }
+
+      function BottomNav({ activeTab, setActiveTab }) {
+        const links = [
+          { id: "home", icon: "⌂", label: "Home" },
+          { id: "tasks", icon: "✓", label: "Tasks" },
+          { id: "focus", icon: "⏱", label: "Focus" },
+          { id: "life", icon: "◎", label: "Life" },
+        ];
+        return (
+          <nav className="bottom-nav">
+            {links.map((link) => (
+              <button
+                key={link.id}
+                className={
+                  "bottom-nav-item" +
+                  (activeTab === link.id ? " bottom-nav-item--active" : "")
+                }
+                onClick={() => setActiveTab(link.id)}
+              >
+                <span className="bottom-nav-icon">{link.icon}</span>
+                <span className="bottom-nav-label">{link.label}</span>
+              </button>
+            ))}
+          </nav>
+        );
+      }
+
+      function GlassMenu({ onClose }) {
+        return (
+          <div className="menu-overlay" onClick={onClose}>
+            <div
+              className="menu-panel"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="menu-row">
+                <span>Check timetable</span>
+              </div>
+              <div className="menu-row">
+                <span>Mark study session</span>
+              </div>
+              <div className="menu-row">
+                <span>Open settings</span>
+              </div>
+              <div className="menu-row menu-row--danger">
+                <span>Clear local data</span>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      /* ---------- SCREENS ---------- */
+
+      function HomeScreen({
+        tasksToday,
+        toggleTask,
+        quickText,
+        setQuickText,
+        addQuickTask,
+        studyMinutesToday,
+        fitnessMinutesToday,
+        timerSeconds,
+      }) {
+        const min = String(Math.floor(timerSeconds / 60)).padStart(2, "0");
+        const sec = String(timerSeconds % 60).padStart(2, "0");
+
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, "0");
+        const minutes = String(now.getMinutes()).padStart(2, "0");
+
+        return (
+          <div className="screen-content">
+            <section className="hero-card">
+              <div className="hero-time-main">
+                <span className="hero-time-hours">{hours}</span>
+                <span className="hero-time-separator">:</span>
+                <span className="hero-time-minutes">{minutes}</span>
+              </div>
+              <div className="hero-time-sub">
+                <span>Home</span>
+                <span className="hero-dot">•</span>
+                <span>Focus ready</span>
+              </div>
+              <div className="hero-footer">
+                <span>Next block</span>
+                <span>
+                  {min}:{sec}
+                </span>
+              </div>
+            </section>
+
+            <section className="card-row">
+              <div className="glass-card">
+                <div className="card-header-row">
+                  <span className="card-label">Today’s Tasks</span>
+                  <span className="card-pill">
+                    {tasksToday.filter((t) => t.done).length}/
+                    {tasksToday.length}
+                  </span>
+                </div>
+                <div className="task-list">
+                  {tasksToday.length === 0 && (
+                    <div className="empty-text">
+                      Nothing due. Pull something forward.
+                    </div>
+                  )}
+                  {tasksToday.map((t) => (
+                    <button
+                      key={t.id}
+                      className={
+                        "task-pill" + (t.done ? " task-pill--done" : "")
+                      }
+                      onClick={() => toggleTask(t.id)}
+                    >
+                      <span className="task-check">
+                        {t.done ? "✓" : ""}
+                      </span>
+                      <span className="task-title">{t.title}</span>
+                      <span className="task-tag">{t.tag}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="glass-card">
+                <div className="card-header-row">
+                  <span className="card-label">Daily Goals</span>
+                </div>
+                <ProgressBar
+                  label="Study"
+                  value={studyMinutesToday}
+                  max={120}
+                  unit="min"
+                />
+                <ProgressBar
+                  label="Movement"
+                  value={fitnessMinutesToday}
+                  max={40}
+                  unit="min"
+                />
+              </div>
+            </section>
+
+            <section className="glass-card">
+              <div className="card-header-row">
+                <span className="card-label">Quick Capture</span>
+              </div>
+              <div className="quick-row">
+                <input
+                  className="quick-input"
+                  placeholder="Type and hit Enter to turn this into a task…"
+                  value={quickText}
+                  onChange={(e) => setQuickText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") addQuickTask();
+                  }}
+                />
+                <button className="chip-btn" onClick={addQuickTask}>
+                  Add
+                </button>
+              </div>
+            </section>
+          </div>
+        );
+      }
+
+      function TasksScreen({ tasks, toggleTask }) {
+        return (
+          <div className="screen-content">
+            <h2 className="screen-title">Tasks &amp; Projects</h2>
+            <div className="glass-card">
+              <div className="card-header-row">
+                <span className="card-label">All Tasks</span>
+              </div>
+              <div className="task-list task-list--column">
+                {tasks.map((t) => (
+                  <button
+                    key={t.id}
+                    className={
+                      "task-pill task-pill--wide" +
+                      (t.done ? " task-pill--done" : "")
+                    }
+                    onClick={() => toggleTask(t.id)}
+                  >
+                    <span className="task-check">
+                      {t.done ? "✓" : ""}
+                    </span>
+                    <div className="task-main">
+                      <span className="task-title">{t.title}</span>
+                      <span className="task-meta">
+                        {t.tag} · due {t.due}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+                {tasks.length === 0 && (
+                  <div className="empty-text">
+                    No tasks yet. Add some on the Home screen.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function FocusScreen({
+        timerSeconds,
+        timerRunning,
+        setTimerRunning,
+        resetTimer,
+        logStudy,
+      }) {
+        const min = String(Math.floor(timerSeconds / 60)).padStart(2, "0");
+        const sec = String(timerSeconds % 60).padStart(2, "0");
+        const [subject, setSubject] = useState("Physics");
+        const [minutes, setMinutes] = useState(25);
+
+        function handleLog() {
+          if (!minutes || minutes <= 0) return;
+          logStudy(subject, minutes);
+        }
+
+        return (
+          <div className="screen-content">
+            <h2 className="screen-title">Focus Mode</h2>
+            <div className="hero-card hero-card--focus">
+              <div className="focus-time">
+                {min}:{sec}
+              </div>
+              <div className="focus-sub">Pomodoro · 25 min</div>
+              <div className="focus-actions">
+                <button
+                  className="primary-btn"
+                  onClick={() => setTimerRunning((r) => !r)}
+                >
+                  {timerRunning ? "Pause" : "Start"}
+                </button>
+                <button className="ghost-btn" onClick={resetTimer}>
+                  Reset
+                </button>
+              </div>
+            </div>
+
+            <div className="glass-card">
+              <div className="card-header-row">
+                <span className="card-label">Log Session</span>
+              </div>
+              <div className="form-row">
+                <select
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                >
+                  <option>Physics</option>
+                  <option>Maths</option>
+                  <option>Further Maths</option>
+                  <option>Computer Science</option>
+                  <option>Guitar</option>
+                </select>
+                <input
+                  type="number"
+                  min="5"
+                  step="5"
+                  value={minutes}
+                  onChange={(e) => setMinutes(Number(e.target.value))}
+                />
+                <button className="chip-btn" onClick={handleLog}>
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function LifeScreen({
+        moneySaved,
+        moneyTarget,
+        addMoney,
+        fitnessLogs,
+        logFitness,
+      }) {
+        const [amount, setAmount] = useState("");
+        const [kind, setKind] = useState("Gym");
+        const [mins, setMins] = useState(30);
+
+        const pct = Math.min(
+          100,
+          Math.round((moneySaved / moneyTarget) * 100)
+        );
+
+        const today = todayISO();
+        const todayLogs = fitnessLogs.filter((f) => f.date === today);
+        const todayMinutes = todayLogs.reduce(
+          (sum, f) => sum + f.minutes,
+          0
+        );
+
+        function handleMoney() {
+          addMoney(amount);
+          setAmount("");
+        }
+
+        function handleFitness() {
+          if (!mins || mins <= 0) return;
+          logFitness(kind, mins);
+        }
+
+        return (
+          <div className="screen-content">
+            <h2 className="screen-title">Life Dashboard</h2>
+            <section className="card-row">
+              <div className="glass-card">
+                <div className="card-header-row">
+                  <span className="card-label">Uni / Gear Fund</span>
+                  <span className="card-pill">{pct}%</span>
+                </div>
+                <div className="money-main">
+                  <span>£{moneySaved.toFixed(0)}</span>
+                  <span className="money-sub">
+                    target £{moneyTarget.toFixed(0)}
+                  </span>
+                </div>
+                <ProgressBar
+                  label="Progress"
+                  value={moneySaved}
+                  max={moneyTarget}
+                  hideLabel
+                />
+                <div className="form-row">
+                  <input
+                    type="number"
+                    placeholder="Add amount"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                  />
+                  <button className="chip-btn" onClick={handleMoney}>
+                    + Add
+                  </button>
+                </div>
+              </div>
+
+              <div className="glass-card">
+                <div className="card-header-row">
+                  <span className="card-label">Movement Today</span>
+                  <span className="card-pill">{todayMinutes} min</span>
+                </div>
+                <ProgressBar
+                  label="Goal"
+                  value={todayMinutes}
+                  max={40}
+                  unit="min"
+                />
+                <div className="form-row">
+                  <select
+                    value={kind}
+                    onChange={(e) => setKind(e.target.value)}
+                  >
+                    <option>Gym</option>
+                    <option>Surf</option>
+                    <option>Swim</option>
+                    <option>Run</option>
+                  </select>
+                  <input
+                    type="number"
+                    min="5"
+                    step="5"
+                    value={mins}
+                    onChange={(e) => setMins(Number(e.target.value))}
+                  />
+                  <button className="chip-btn" onClick={handleFitness}>
+                    Log
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        );
+      }
+
+      function ProgressBar({ label, value, max, unit, hideLabel }) {
+        const pct = Math.min(100, Math.round((value / max) * 100));
+        return (
+          <div className="progress-block">
+            {!hideLabel && (
+              <div className="progress-header">
+                <span>{label}</span>
+                <span className="progress-meta">
+                  {value}
+                  {unit ? " " + unit : ""} / {max}
+                  {unit ? " " + unit : ""}
+                </span>
+              </div>
+            )}
+            <div className="progress-track">
+              <div
+                className="progress-fill"
+                style={{ width: pct + "%" }}
+              />
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
