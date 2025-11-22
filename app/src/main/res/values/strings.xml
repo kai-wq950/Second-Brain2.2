@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nothing Study Companion</string>
+    <string name="widget_title">Study Pulse</string>
+    <string name="widget_default_message">Deep focus for 25 minutes</string>
+    <string name="widget_cta">Tap to launch</string>
+    <string name="dashboard_title">Today&#39;s Focus</string>
+    <string name="intentionality">Intentionality</string>
+    <string name="energy">Energy</string>
+    <string name="progress">Progress</string>
+    <string name="streak">Streak</string>
+</resources>
