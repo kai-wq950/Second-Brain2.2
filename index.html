@@ -2,23 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Second Brain OS</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <!-- Fonts -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A-Level Vector Visualiser</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Space+Grotesk:wght@500;600&display=swap"
       rel="stylesheet"
     />
-
     <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <div id="root"></div>
-
-    <!-- React + ReactDOM -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <script
       crossorigin
       src="https://unpkg.com/react@18/umd/react.development.js"
@@ -27,610 +20,957 @@
       crossorigin
       src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
     ></script>
-
-    <!-- Babel (so we can use JSX inline) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- APP CODE INLINE = no CORS issues -->
+  </head>
+  <body>
+    <div id="root"></div>
     <script type="text/babel">
-      const { useState, useEffect, useMemo } = React;
+      const { useState, useEffect } = React;
 
-      function todayISO() {
-        const d = new Date();
-        d.setHours(0, 0, 0, 0);
-        return d.toISOString().slice(0, 10);
+      function parseComponents(text, expected) {
+        if (!text) throw new Error("Enter values");
+        const trimmed = text.trim();
+        const ijk = /([+-]?\d*\.?\d*)\s*i|([+-]?\d*\.?\d*)\s*j|([+-]?\d*\.?\d*)\s*k/i;
+        if (ijk.test(trimmed)) {
+          const coeff = { i: 0, j: 0, k: 0 };
+          trimmed
+            .replace(/\s+/g, "")
+            .match(/([+-]?\d*\.?\d*)[ijk]/gi)
+            .forEach((part) => {
+              const unit = part.slice(-1).toLowerCase();
+              let value = part.slice(0, -1);
+              if (value === "" || value === "+") value = 1;
+              if (value === "-") value = -1;
+              coeff[unit] = parseFloat(value);
+            });
+          const arr = [coeff.i, coeff.j];
+          if (expected === 3 || coeff.k !== 0 || expected === undefined) arr.push(coeff.k);
+          if (expected && arr.length !== expected)
+            throw new Error(`Expected ${expected} components`);
+          return arr;
+        }
+        const clean = trimmed.replace(/[()\[\]]/g, "");
+        const parts = clean.split(/[,;\s]+/).filter(Boolean);
+        if (expected && parts.length !== expected)
+          throw new Error(`Expected ${expected} components`);
+        return parts.map((p) => {
+          const n = parseFloat(p);
+          if (Number.isNaN(n)) throw new Error("Use numeric components");
+          return n;
+        });
+      }
+
+      const mag = (v) => Math.sqrt(v.reduce((s, c) => s + c * c, 0));
+      const dot = (a, b) => a.reduce((s, c, i) => s + c * b[i], 0);
+      const cross = (a, b) => [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+      ];
+
+      const formatVec = (v) => `(${v.map((c) => c.toFixed(3)).join(", ")})`;
+
+      function angleBetween(a, b) {
+        const m1 = mag(a);
+        const m2 = mag(b);
+        if (m1 === 0 || m2 === 0) throw new Error("Zero vector");
+        const cos = dot(a, b) / (m1 * m2);
+        return Math.acos(Math.min(1, Math.max(-1, cos)));
+      }
+
+      function projection(a, b) {
+        const denom = dot(b, b);
+        if (denom === 0) throw new Error("Cannot project onto zero vector");
+        const scale = dot(a, b) / denom;
+        return b.map((c) => c * scale);
+      }
+
+      function unit(v) {
+        const m = mag(v);
+        if (m === 0) throw new Error("Zero vector has no unit vector");
+        return v.map((c) => c / m);
+      }
+
+      function pointFromPlane({ a, b, c, d }) {
+        if (c !== 0) return [0, 0, -d / c];
+        if (b !== 0) return [0, -d / b, 0];
+        if (a !== 0) return [-d / a, 0, 0];
+        throw new Error("Invalid plane");
+      }
+
+      function orthogonalDirections(normal) {
+        const basis = Math.abs(normal[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+        const d1 = cross(normal, basis);
+        const d2 = cross(normal, d1);
+        return [unit(d1), unit(d2)];
+      }
+
+      function line2DFromCartesian(a, b, c) {
+        const dir = [b, -a];
+        const pt = b !== 0 ? [0, -c / b] : [-c / a, 0];
+        return { point: pt, direction: dir, form: "Cartesian" };
+      }
+
+      function line3DFromPlaneIntersection(coeff) {
+        // helper unused now but kept for completeness
+        return coeff;
+      }
+
+      function planeFromCartesian(a, b, c, d) {
+        const normal = [a, b, c];
+        const point = pointFromPlane({ a, b, c, d });
+        const [d1, d2] = orthogonalDirections(normal);
+        return { point, normal, directions: [d1, d2], form: "Cartesian" };
+      }
+
+      function distancePointToLine(pt, line) {
+        const p = pt;
+        const a = line.point;
+        const d = line.direction;
+        const ap = p.map((v, i) => v - a[i]);
+        if (d.length === 2) {
+          const area2 = Math.abs(ap[0] * d[1] - ap[1] * d[0]);
+          const len = mag(d);
+          return area2 / len;
+        }
+        const crossMag = mag(cross(ap, d));
+        return crossMag / mag(d);
+      }
+
+      function distancePointToPlane(pt, plane) {
+        const n = plane.normal;
+        const diff = pt.map((v, i) => v - plane.point[i]);
+        return Math.abs(dot(diff, n)) / mag(n);
+      }
+
+      function angleLinePlane(line, plane) {
+        const angle = angleBetween(line.direction, plane.normal);
+        return Math.PI / 2 - angle;
+      }
+
+      function anglePlanes(p1, p2) {
+        return angleBetween(p1.normal, p2.normal);
+      }
+
+      function intersectionLinePlane(line, plane) {
+        const p0 = plane.point;
+        const n = plane.normal;
+        const l0 = line.point;
+        const d = line.direction;
+        const denom = dot(n, d);
+        if (Math.abs(denom) < 1e-9) return null;
+        const t = dot(n, p0.map((v, i) => v - l0[i])) / denom;
+        return l0.map((v, i) => v + d[i] * t);
+      }
+
+      function intersectionLineLine2D(l1, l2) {
+        const [x1, y1] = l1.point;
+        const [dx1, dy1] = l1.direction;
+        const [x2, y2] = l2.point;
+        const [dx2, dy2] = l2.direction;
+        const det = dx1 * dy2 - dy1 * dx2;
+        if (Math.abs(det) < 1e-9) return null;
+        const t = ((x2 - x1) * dy2 - (y2 - y1) * dx2) / det;
+        return [x1 + dx1 * t, y1 + dy1 * t];
+      }
+
+      function symmetricFromLine(line) {
+        const [x0, y0, z0] = line.point;
+        const [l, m, n] = line.direction;
+        return `(x - ${x0.toFixed(3)})/${l.toFixed(3)} = (y - ${y0.toFixed(3)})/${m.toFixed(3)} = (z - ${z0.toFixed(3)})/${n.toFixed(3)}`;
+      }
+
+      function cartesianFromLine2D(line) {
+        const [x0, y0] = line.point;
+        const [l, m] = line.direction;
+        const a = -m;
+        const b = l;
+        const c = -(a * x0 + b * y0);
+        return `${a.toFixed(3)}x + ${b.toFixed(3)}y + ${c.toFixed(3)} = 0`;
       }
 
       function App() {
-        const [activeTab, setActiveTab] = useState("home");
-        const [tasks, setTasks] = useState([
-          {
-            id: 1,
-            title: "Finish physics questions",
-            tag: "Study",
-            due: todayISO(),
-            done: false,
-          },
-          {
-            id: 2,
-            title: "Guitar practice 20 min",
-            tag: "Guitar",
-            due: todayISO(),
-            done: false,
-          },
-          {
-            id: 3,
-            title: "Gym session",
-            tag: "Fitness",
-            due: todayISO(),
-            done: false,
-          },
-        ]);
-        const [quickText, setQuickText] = useState("");
-        const [studySessions, setStudySessions] = useState([]);
-        const [fitnessLogs, setFitnessLogs] = useState([]);
-        const [moneySaved, setMoneySaved] = useState(350);
-        const [moneyTarget] = useState(2000);
-        const [timerSeconds, setTimerSeconds] = useState(25 * 60);
-        const [timerRunning, setTimerRunning] = useState(false);
-        const [menuOpen, setMenuOpen] = useState(false);
+        const [objects, setObjects] = useState([]);
+        const [results, setResults] = useState([]);
+        const [formState, setFormState] = useState({
+          type: "vector",
+          dim: "2",
+          form: "components",
+          name: "v1",
+          values: {},
+        });
+        const [operation, setOperation] = useState({
+          kind: "vector-angle",
+          first: "",
+          second: "",
+        });
 
         useEffect(() => {
-          if (!timerRunning) return;
-          const id = setInterval(() => {
-            setTimerSeconds((prev) => (prev > 0 ? prev - 1 : 0));
-          }, 1000);
-          return () => clearInterval(id);
-        }, [timerRunning]);
+          renderPlot(objects);
+        }, [objects]);
 
-        const tasksToday = useMemo(
-          () => tasks.filter((t) => t.due === todayISO()),
-          [tasks]
-        );
-
-        const studyMinutesToday = useMemo(
-          () =>
-            studySessions
-              .filter((s) => s.date === todayISO())
-              .reduce((sum, s) => sum + s.minutes, 0),
-          [studySessions]
-        );
-
-        const fitnessMinutesToday = useMemo(
-          () =>
-            fitnessLogs
-              .filter((f) => f.date === todayISO())
-              .reduce((sum, f) => sum + f.minutes, 0),
-          [fitnessLogs]
-        );
-
-        function toggleTask(id) {
-          setTasks((prev) =>
-            prev.map((t) =>
-              t.id === id ? { ...t, done: !t.done } : t
-            )
-          );
+        function pushResult(text) {
+          setResults((prev) => [{ id: Date.now(), text }, ...prev]);
         }
 
-        function addQuickTask() {
-          const text = quickText.trim();
-          if (!text) return;
-          setTasks((prev) => [
-            ...prev,
-            {
-              id: Date.now(),
-              title: text,
-              tag: "Inbox",
-              due: todayISO(),
-              done: false,
-            },
-          ]);
-          setQuickText("");
+        function addObject() {
+          try {
+            const obj = buildObject(formState);
+            setObjects((prev) => [...prev, obj]);
+            pushResult(`${obj.name}: added (${obj.summary})`);
+          } catch (err) {
+            alert(err.message);
+          }
         }
 
-        function resetTimer() {
-          setTimerSeconds(25 * 60);
-          setTimerRunning(false);
+        function buildObject(state) {
+          const name = state.name || `obj${objects.length + 1}`;
+          if (!name.trim()) throw new Error("Name required");
+          const dim = state.dim === "3" ? 3 : 2;
+          if (state.type === "vector") {
+            const vec = parseComponents(state.values.components, dim);
+            return { type: "vector", dim, name, vector: vec, summary: `vector ${formatVec(vec)}` };
+          }
+          if (state.type === "point") {
+            const pt = parseComponents(state.values.point, dim);
+            return { type: "point", dim, name, point: pt, summary: `point ${formatVec(pt)}` };
+          }
+          if (state.type === "line") {
+            if (dim === 2) {
+              if (state.form === "vector2") {
+                const point = parseComponents(state.values.point, 2);
+                const direction = parseComponents(state.values.direction, 2);
+                return {
+                  type: "line",
+                  dim,
+                  name,
+                  point,
+                  direction,
+                  summary: `r = ${formatVec(point)} + λ${formatVec(direction)}`,
+                };
+              }
+              const [a, b, c] = [state.values.a, state.values.b, state.values.c].map((v) => parseFloat(v));
+              if ([a, b, c].some((x) => Number.isNaN(x))) throw new Error("Enter numeric a, b, c");
+              const { point, direction } = line2DFromCartesian(a, b, c);
+              return {
+                type: "line",
+                dim,
+                name,
+                point,
+                direction,
+                summary: `${a}x + ${b}y + ${c} = 0`,
+              };
+            }
+            // 3D line
+            if (state.form === "vector3") {
+              const point = parseComponents(state.values.point, 3);
+              const direction = parseComponents(state.values.direction, 3);
+              return {
+                type: "line",
+                dim,
+                name,
+                point,
+                direction,
+                summary: `r = ${formatVec(point)} + λ${formatVec(direction)}`,
+              };
+            }
+            if (state.form === "symmetric3") {
+              const point = parseComponents(state.values.point, 3);
+              const direction = parseComponents(state.values.direction, 3);
+              return {
+                type: "line",
+                dim,
+                name,
+                point,
+                direction,
+                summary: symmetricFromLine({ point, direction }),
+              };
+            }
+            const point = parseComponents(state.values.point, 3);
+            const direction = parseComponents(state.values.direction, 3);
+            return {
+              type: "line",
+              dim,
+              name,
+              point,
+              direction,
+              summary: `x=${point[0]}+λ${direction[0]}, y=${point[1]}+λ${direction[1]}, z=${point[2]}+λ${direction[2]}`,
+            };
+          }
+          if (state.type === "plane") {
+            const a = parseFloat(state.values.a);
+            const b = parseFloat(state.values.b);
+            const c = parseFloat(state.values.c);
+            const d = parseFloat(state.values.d);
+            if (state.form === "cartesian") {
+              if ([a, b, c, d].some((x) => Number.isNaN(x))) throw new Error("Enter a, b, c, d");
+              const { point, normal, directions } = planeFromCartesian(a, b, c, d);
+              return {
+                type: "plane",
+                dim: 3,
+                name,
+                point,
+                normal,
+                directions,
+                summary: `${a}x + ${b}y + ${c}z + ${d} = 0`,
+              };
+            }
+            if (state.form === "normal") {
+              const point = parseComponents(state.values.point, 3);
+              const normal = parseComponents(state.values.normal, 3);
+              const directions = orthogonalDirections(normal);
+              return {
+                type: "plane",
+                dim: 3,
+                name,
+                point,
+                normal,
+                directions,
+                summary: `normal ${formatVec(normal)} through ${formatVec(point)}`,
+              };
+            }
+            const point = parseComponents(state.values.point, 3);
+            const dir1 = parseComponents(state.values.dir1, 3);
+            const dir2 = parseComponents(state.values.dir2, 3);
+            const normal = cross(dir1, dir2);
+            return {
+              type: "plane",
+              dim: 3,
+              name,
+              point,
+              normal,
+              directions: [dir1, dir2],
+              summary: `r=${formatVec(point)}+λ${formatVec(dir1)}+μ${formatVec(dir2)}`,
+            };
+          }
+          throw new Error("Unsupported type");
         }
 
-        function logStudy(subject, minutes) {
-          setStudySessions((prev) => [
-            ...prev,
-            { id: Date.now(), subject, minutes, date: todayISO() },
-          ]);
+        function runOperation() {
+          try {
+            const op = operation.kind;
+            if (op.startsWith("vector")) return runVectorOp();
+            if (op.startsWith("distance")) return runDistance();
+            if (op.startsWith("angle")) return runAngle();
+            if (op.startsWith("intersection")) return runIntersection();
+            throw new Error("Pick an operation");
+          } catch (err) {
+            alert(err.message);
+          }
         }
 
-        function logFitness(kind, minutes) {
-          setFitnessLogs((prev) => [
-            ...prev,
-            { id: Date.now(), kind, minutes, date: todayISO() },
-          ]);
+        function pick(id) {
+          return objects.find((o) => o.name === id);
         }
 
-        function addMoney(amount) {
-          const value = Number(amount);
-          if (!value || value <= 0) return;
-          setMoneySaved((prev) => prev + value);
+        function runVectorOp() {
+          const a = pick(operation.first);
+          const b = pick(operation.second);
+          if (!a || !b) throw new Error("Select two vectors");
+          if (a.type !== "vector" || b.type !== "vector") throw new Error("Vectors only");
+          if (operation.kind === "vector-dot") {
+            pushResult(`dot(${a.name}, ${b.name}) = ${dot(a.vector, b.vector).toFixed(3)}`);
+            return;
+          }
+          if (operation.kind === "vector-angle") {
+            const ang = angleBetween(a.vector, b.vector);
+            pushResult(`angle(${a.name}, ${b.name}) = ${(ang * 180 / Math.PI).toFixed(2)}°`);
+            return;
+          }
+          if (operation.kind === "vector-cross") {
+            if (a.vector.length !== 3 || b.vector.length !== 3)
+              throw new Error("Cross product is 3D only");
+            const res = cross(a.vector, b.vector);
+            pushResult(`cross(${a.name}, ${b.name}) = ${formatVec(res)}`);
+            return;
+          }
+          if (operation.kind === "vector-proj") {
+            const res = projection(a.vector, b.vector);
+            pushResult(`proj_${b.name}(${a.name}) = ${formatVec(res)}`);
+          }
         }
 
-        const screenProps = {
-          tasks,
-          tasksToday,
-          toggleTask,
-          quickText,
-          setQuickText,
-          addQuickTask,
-          timerSeconds,
-          timerRunning,
-          setTimerRunning,
-          resetTimer,
-          studyMinutesToday,
-          fitnessMinutesToday,
-          logStudy,
-          logFitness,
-          moneySaved,
-          moneyTarget,
-          addMoney,
-          studySessions,
-          fitnessLogs,
-        };
+        function runDistance() {
+          const a = pick(operation.first);
+          const b = pick(operation.second);
+          if (!a || !b) throw new Error("Select objects");
+          if (operation.kind === "distance-point-line") {
+            if (a.type !== "point" || b.type !== "line") throw new Error("Need point then line");
+            const dist = distancePointToLine(a.point, b);
+            pushResult(`d(${a.name}, ${b.name}) = ${dist.toFixed(3)}`);
+            return;
+          }
+          if (operation.kind === "distance-point-plane") {
+            if (a.type !== "point" || b.type !== "plane") throw new Error("Need point then plane");
+            const dist = distancePointToPlane(a.point, b);
+            pushResult(`d(${a.name}, ${b.name}) = ${dist.toFixed(3)}`);
+          }
+        }
+
+        function runAngle() {
+          const a = pick(operation.first);
+          const b = pick(operation.second);
+          if (!a || !b) throw new Error("Select objects");
+          if (operation.kind === "angle-line-plane") {
+            if (a.type !== "line" || b.type !== "plane") throw new Error("Need line then plane");
+            const ang = angleLinePlane(a, b);
+            pushResult(`angle(${a.name}, ${b.name}) = ${(ang * 180 / Math.PI).toFixed(2)}°`);
+            return;
+          }
+          if (operation.kind === "angle-plane-plane") {
+            if (a.type !== "plane" || b.type !== "plane") throw new Error("Plane-plane only");
+            const ang = anglePlanes(a, b);
+            pushResult(`angle(${a.name}, ${b.name}) = ${(ang * 180 / Math.PI).toFixed(2)}°`);
+            return;
+          }
+          if (operation.kind === "angle-line-line") {
+            if (a.type !== "line" || b.type !== "line") throw new Error("Line-line only");
+            const ang = angleBetween(a.direction, b.direction);
+            pushResult(`angle(${a.name}, ${b.name}) = ${(ang * 180 / Math.PI).toFixed(2)}°`);
+          }
+        }
+
+        function runIntersection() {
+          const a = pick(operation.first);
+          const b = pick(operation.second);
+          if (!a || !b) throw new Error("Select objects");
+          if (operation.kind === "intersection-line-plane") {
+            if (a.type !== "line" || b.type !== "plane") throw new Error("Line then plane");
+            const p = intersectionLinePlane(a, b);
+            pushResult(p ? `Intersection at ${formatVec(p)}` : "Line is parallel to plane");
+            return;
+          }
+          if (operation.kind === "intersection-line-line-2d") {
+            if (a.type !== "line" || b.type !== "line" || a.dim !== 2 || b.dim !== 2)
+              throw new Error("2D lines only");
+            const p = intersectionLineLine2D(a, b);
+            pushResult(p ? `Intersection at ${formatVec(p)}` : "Lines are parallel");
+          }
+        }
+
+        function clearAll() {
+          setObjects([]);
+          setResults([]);
+          Plotly.purge("plot");
+        }
 
         return (
-          <div className="app-bg">
-            <div className="gradient-orb gradient-orb--left" />
-            <div className="gradient-orb gradient-orb--right" />
-            <div className="phone-frame">
-              <TopBar onMenuToggle={() => setMenuOpen((m) => !m)} />
-              <div key={activeTab} className="screen">
-                {activeTab === "home" && <HomeScreen {...screenProps} />}
-                {activeTab === "tasks" && <TasksScreen {...screenProps} />}
-                {activeTab === "focus" && <FocusScreen {...screenProps} />}
-                {activeTab === "life" && <LifeScreen {...screenProps} />}
-              </div>
-              <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-              {menuOpen && (
-                <GlassMenu onClose={() => setMenuOpen(false)} />
-              )}
-            </div>
-          </div>
-        );
-      }
-
-      function TopBar({ onMenuToggle }) {
-        const now = new Date();
-        const time = now.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        const date = now.toLocaleDateString([], {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-        });
-
-        return (
-          <header className="topbar">
-            <div className="topbar-left">
-              <div className="avatar">K</div>
+          <div className="page">
+            <header className="header">
               <div>
-                <div className="topbar-title">Second Brain</div>
-                <div className="topbar-sub">Kai · Personal OS</div>
+                <p className="eyebrow">Edexcel Core Pure 1 & 2</p>
+                <h1>Vector Visualiser – Web</h1>
               </div>
-            </div>
-            <div className="topbar-right">
-              <div className="chip">
-                <span>{time}</span>
-                <span className="chip-dot">•</span>
-                <span>{date}</span>
-              </div>
-              <button className="icon-btn" onClick={onMenuToggle}>
-                ⋯
-              </button>
-            </div>
-          </header>
-        );
-      }
+              <button className="ghost" onClick={clearAll}>Clear workspace</button>
+            </header>
 
-      function BottomNav({ activeTab, setActiveTab }) {
-        const links = [
-          { id: "home", icon: "⌂", label: "Home" },
-          { id: "tasks", icon: "✓", label: "Tasks" },
-          { id: "focus", icon: "⏱", label: "Focus" },
-          { id: "life", icon: "◎", label: "Life" },
-        ];
-        return (
-          <nav className="bottom-nav">
-            {links.map((link) => (
-              <button
-                key={link.id}
-                className={
-                  "bottom-nav-item" +
-                  (activeTab === link.id ? " bottom-nav-item--active" : "")
-                }
-                onClick={() => setActiveTab(link.id)}
-              >
-                <span className="bottom-nav-icon">{link.icon}</span>
-                <span className="bottom-nav-label">{link.label}</span>
-              </button>
-            ))}
-          </nav>
-        );
-      }
-
-      function GlassMenu({ onClose }) {
-        return (
-          <div className="menu-overlay" onClick={onClose}>
-            <div
-              className="menu-panel"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="menu-row">
-                <span>Check timetable</span>
-              </div>
-              <div className="menu-row">
-                <span>Mark study session</span>
-              </div>
-              <div className="menu-row">
-                <span>Open settings</span>
-              </div>
-              <div className="menu-row menu-row--danger">
-                <span>Clear local data</span>
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      /* ---------- SCREENS ---------- */
-
-      function HomeScreen({
-        tasksToday,
-        toggleTask,
-        quickText,
-        setQuickText,
-        addQuickTask,
-        studyMinutesToday,
-        fitnessMinutesToday,
-        timerSeconds,
-      }) {
-        const min = String(Math.floor(timerSeconds / 60)).padStart(2, "0");
-        const sec = String(timerSeconds % 60).padStart(2, "0");
-
-        const now = new Date();
-        const hours = String(now.getHours()).padStart(2, "0");
-        const minutes = String(now.getMinutes()).padStart(2, "0");
-
-        return (
-          <div className="screen-content">
-            <section className="hero-card">
-              <div className="hero-time-main">
-                <span className="hero-time-hours">{hours}</span>
-                <span className="hero-time-separator">:</span>
-                <span className="hero-time-minutes">{minutes}</span>
-              </div>
-              <div className="hero-time-sub">
-                <span>Home</span>
-                <span className="hero-dot">•</span>
-                <span>Focus ready</span>
-              </div>
-              <div className="hero-footer">
-                <span>Next block</span>
-                <span>
-                  {min}:{sec}
-                </span>
-              </div>
-            </section>
-
-            <section className="card-row">
-              <div className="glass-card">
-                <div className="card-header-row">
-                  <span className="card-label">Today’s Tasks</span>
-                  <span className="card-pill">
-                    {tasksToday.filter((t) => t.done).length}/
-                    {tasksToday.length}
-                  </span>
-                </div>
-                <div className="task-list">
-                  {tasksToday.length === 0 && (
-                    <div className="empty-text">
-                      Nothing due. Pull something forward.
-                    </div>
-                  )}
-                  {tasksToday.map((t) => (
-                    <button
-                      key={t.id}
-                      className={
-                        "task-pill" + (t.done ? " task-pill--done" : "")
+            <main className="grid">
+              <section className="card">
+                <h2>Add object</h2>
+                <div className="form-grid">
+                  <label>
+                    Name
+                    <input
+                      value={formState.name}
+                      onChange={(e) => setFormState({ ...formState, name: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Type
+                    <select
+                      value={formState.type}
+                      onChange={(e) =>
+                        setFormState({
+                          ...formState,
+                          type: e.target.value,
+                          dim: e.target.value === "plane" ? "3" : formState.dim,
+                        })
                       }
-                      onClick={() => toggleTask(t.id)}
                     >
-                      <span className="task-check">
-                        {t.done ? "✓" : ""}
-                      </span>
-                      <span className="task-title">{t.title}</span>
-                      <span className="task-tag">{t.tag}</span>
-                    </button>
+                      <option value="vector">Vector</option>
+                      <option value="point">Point</option>
+                      <option value="line">Line</option>
+                      <option value="plane">Plane</option>
+                    </select>
+                  </label>
+                  {formState.type !== "plane" && (
+                    <label>
+                      Dimension
+                      <select
+                        value={formState.dim}
+                        onChange={(e) => setFormState({ ...formState, dim: e.target.value })}
+                      >
+                        <option value="2">2D</option>
+                        <option value="3">3D</option>
+                      </select>
+                    </label>
+                  )}
+                  {formState.type === "vector" && (
+                    <label className="full">
+                      Components (e.g. 1,2 or 2i-3j+k)
+                      <input
+                        value={formState.values.components || ""}
+                        onChange={(e) =>
+                          setFormState({ ...formState, values: { components: e.target.value } })
+                        }
+                      />
+                    </label>
+                  )}
+                  {formState.type === "point" && (
+                    <label className="full">
+                      Coordinates
+                      <input
+                        value={formState.values.point || ""}
+                        onChange={(e) =>
+                          setFormState({ ...formState, values: { point: e.target.value } })
+                        }
+                      />
+                    </label>
+                  )}
+                  {formState.type === "line" && formState.dim === "2" && (
+                    <>
+                      <label>
+                        Form
+                        <select
+                          value={formState.form === "components" ? "vector2" : formState.form || "vector2"}
+                          onChange={(e) => setFormState({ ...formState, form: e.target.value })}
+                        >
+                          <option value="vector2">Vector form</option>
+                          <option value="cartesian2">Cartesian ax+by+c=0</option>
+                        </select>
+                      </label>
+                      {formState.form !== "cartesian2" && (
+                        <>
+                          <label>
+                            Point a
+                            <input
+                              value={formState.values.point || ""}
+                              onChange={(e) =>
+                                setFormState({
+                                  ...formState,
+                                  form: "vector2",
+                                  values: { ...formState.values, point: e.target.value },
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Direction b
+                            <input
+                              value={formState.values.direction || ""}
+                              onChange={(e) =>
+                                setFormState({
+                                  ...formState,
+                                  form: "vector2",
+                                  values: { ...formState.values, direction: e.target.value },
+                                })
+                              }
+                            />
+                          </label>
+                        </>
+                      )}
+                      {formState.form === "cartesian2" && (
+                        <div className="coeff-row">
+                          {("abc").split("").map((key) => (
+                            <label key={key}>
+                              {key}
+                              <input
+                                type="number"
+                                value={formState.values[key] || ""}
+                                onChange={(e) =>
+                                  setFormState({
+                                    ...formState,
+                                    values: { ...formState.values, [key]: e.target.value },
+                                  })
+                                }
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {formState.type === "line" && formState.dim === "3" && (
+                    <>
+                      <label>
+                        Form
+                        <select
+                          value={formState.form || "vector3"}
+                          onChange={(e) => setFormState({ ...formState, form: e.target.value })}
+                        >
+                          <option value="vector3">Vector form</option>
+                          <option value="param3">Parametric</option>
+                          <option value="symmetric3">Symmetric</option>
+                        </select>
+                      </label>
+                      <label>
+                        Point a
+                        <input
+                          value={formState.values.point || ""}
+                          onChange={(e) =>
+                            setFormState({
+                              ...formState,
+                              values: { ...formState.values, point: e.target.value },
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Direction b
+                        <input
+                          value={formState.values.direction || ""}
+                          onChange={(e) =>
+                            setFormState({
+                              ...formState,
+                              values: { ...formState.values, direction: e.target.value },
+                            })
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
+                  {formState.type === "plane" && (
+                    <>
+                      <label>
+                        Form
+                        <select
+                          value={formState.form || "cartesian"}
+                          onChange={(e) => setFormState({ ...formState, form: e.target.value })}
+                        >
+                          <option value="cartesian">Cartesian ax+by+cz+d=0</option>
+                          <option value="normal">Normal + point</option>
+                          <option value="vector">Vector form</option>
+                        </select>
+                      </label>
+                      {formState.form === "cartesian" && (
+                        <div className="coeff-row">
+                          {("abcd").split("").map((key) => (
+                            <label key={key}>
+                              {key}
+                              <input
+                                type="number"
+                                value={formState.values[key] || ""}
+                                onChange={(e) =>
+                                  setFormState({
+                                    ...formState,
+                                    values: { ...formState.values, [key]: e.target.value },
+                                  })
+                                }
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      {formState.form === "normal" && (
+                        <>
+                          <label>
+                            Point
+                            <input
+                              value={formState.values.point || ""}
+                              onChange={(e) =>
+                                setFormState({
+                                  ...formState,
+                                  values: { ...formState.values, point: e.target.value },
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Normal
+                            <input
+                              value={formState.values.normal || ""}
+                              onChange={(e) =>
+                                setFormState({
+                                  ...formState,
+                                  values: { ...formState.values, normal: e.target.value },
+                                })
+                              }
+                            />
+                          </label>
+                        </>
+                      )}
+                      {formState.form === "vector" && (
+                        <>
+                          <label>
+                            Point
+                            <input
+                              value={formState.values.point || ""}
+                              onChange={(e) =>
+                                setFormState({
+                                  ...formState,
+                                  values: { ...formState.values, point: e.target.value },
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Direction b
+                            <input
+                              value={formState.values.dir1 || ""}
+                              onChange={(e) =>
+                                setFormState({
+                                  ...formState,
+                                  values: { ...formState.values, dir1: e.target.value },
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Direction c
+                            <input
+                              value={formState.values.dir2 || ""}
+                              onChange={(e) =>
+                                setFormState({
+                                  ...formState,
+                                  values: { ...formState.values, dir2: e.target.value },
+                                })
+                              }
+                            />
+                          </label>
+                        </>
+                      )}
+                    </>
+                  )}
+                  <div className="full actions">
+                    <button onClick={addObject}>Add object</button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="card">
+                <h2>Operations</h2>
+                <div className="form-grid">
+                  <label className="full">
+                    Operation
+                    <select
+                      value={operation.kind}
+                      onChange={(e) => setOperation({ ...operation, kind: e.target.value })}
+                    >
+                      <optgroup label="Vector ↔ Vector">
+                        <option value="vector-angle">Angle</option>
+                        <option value="vector-dot">Dot product</option>
+                        <option value="vector-cross">Cross product (3D)</option>
+                        <option value="vector-proj">Projection of 1 on 2</option>
+                      </optgroup>
+                      <optgroup label="Distances">
+                        <option value="distance-point-line">Point → line</option>
+                        <option value="distance-point-plane">Point → plane</option>
+                      </optgroup>
+                      <optgroup label="Angles">
+                        <option value="angle-line-line">Line ↔ line</option>
+                        <option value="angle-line-plane">Line ↔ plane</option>
+                        <option value="angle-plane-plane">Plane ↔ plane</option>
+                      </optgroup>
+                      <optgroup label="Intersections">
+                        <option value="intersection-line-line-2d">Line ↔ line (2D)</option>
+                        <option value="intersection-line-plane">Line ↔ plane</option>
+                      </optgroup>
+                    </select>
+                  </label>
+                  <label>
+                    First object
+                    <select
+                      value={operation.first}
+                      onChange={(e) => setOperation({ ...operation, first: e.target.value })}
+                    >
+                      <option value="">Choose…</option>
+                      {objects.map((o) => (
+                        <option key={o.name} value={o.name}>
+                          {o.name} ({o.type})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Second object
+                    <select
+                      value={operation.second}
+                      onChange={(e) => setOperation({ ...operation, second: e.target.value })}
+                    >
+                      <option value="">Choose…</option>
+                      {objects.map((o) => (
+                        <option key={o.name} value={o.name}>
+                          {o.name} ({o.type})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="full actions">
+                    <button className="ghost" onClick={runOperation}>Compute</button>
+                  </div>
+                </div>
+                <div className="results">
+                  {results.length === 0 && <p className="muted">Results will appear here.</p>}
+                  {results.map((r) => (
+                    <div key={r.id} className="result-row">{r.text}</div>
                   ))}
                 </div>
-              </div>
+              </section>
 
-              <div className="glass-card">
-                <div className="card-header-row">
-                  <span className="card-label">Daily Goals</span>
-                </div>
-                <ProgressBar
-                  label="Study"
-                  value={studyMinutesToday}
-                  max={120}
-                  unit="min"
-                />
-                <ProgressBar
-                  label="Movement"
-                  value={fitnessMinutesToday}
-                  max={40}
-                  unit="min"
-                />
-              </div>
-            </section>
-
-            <section className="glass-card">
-              <div className="card-header-row">
-                <span className="card-label">Quick Capture</span>
-              </div>
-              <div className="quick-row">
-                <input
-                  className="quick-input"
-                  placeholder="Type and hit Enter to turn this into a task…"
-                  value={quickText}
-                  onChange={(e) => setQuickText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") addQuickTask();
-                  }}
-                />
-                <button className="chip-btn" onClick={addQuickTask}>
-                  Add
-                </button>
-              </div>
-            </section>
-          </div>
-        );
-      }
-
-      function TasksScreen({ tasks, toggleTask }) {
-        return (
-          <div className="screen-content">
-            <h2 className="screen-title">Tasks &amp; Projects</h2>
-            <div className="glass-card">
-              <div className="card-header-row">
-                <span className="card-label">All Tasks</span>
-              </div>
-              <div className="task-list task-list--column">
-                {tasks.map((t) => (
-                  <button
-                    key={t.id}
-                    className={
-                      "task-pill task-pill--wide" +
-                      (t.done ? " task-pill--done" : "")
-                    }
-                    onClick={() => toggleTask(t.id)}
-                  >
-                    <span className="task-check">
-                      {t.done ? "✓" : ""}
-                    </span>
-                    <div className="task-main">
-                      <span className="task-title">{t.title}</span>
-                      <span className="task-meta">
-                        {t.tag} · due {t.due}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-                {tasks.length === 0 && (
-                  <div className="empty-text">
-                    No tasks yet. Add some on the Home screen.
+              <section className="card plot-card">
+                <div className="plot-header">
+                  <div>
+                    <p className="eyebrow">Plot</p>
+                    <h2>Interactive view</h2>
                   </div>
-                )}
-              </div>
-            </div>
+                  <p className="muted">Pan, zoom, rotate (3D)</p>
+                </div>
+                <div id="plot" className="plot"></div>
+              </section>
+            </main>
           </div>
         );
       }
 
-      function FocusScreen({
-        timerSeconds,
-        timerRunning,
-        setTimerRunning,
-        resetTimer,
-        logStudy,
-      }) {
-        const min = String(Math.floor(timerSeconds / 60)).padStart(2, "0");
-        const sec = String(timerSeconds % 60).padStart(2, "0");
-        const [subject, setSubject] = useState("Physics");
-        const [minutes, setMinutes] = useState(25);
-
-        function handleLog() {
-          if (!minutes || minutes <= 0) return;
-          logStudy(subject, minutes);
+      function renderPlot(objects) {
+        if (objects.length === 0) {
+          Plotly.purge("plot");
+          return;
         }
-
-        return (
-          <div className="screen-content">
-            <h2 className="screen-title">Focus Mode</h2>
-            <div className="hero-card hero-card--focus">
-              <div className="focus-time">
-                {min}:{sec}
-              </div>
-              <div className="focus-sub">Pomodoro · 25 min</div>
-              <div className="focus-actions">
-                <button
-                  className="primary-btn"
-                  onClick={() => setTimerRunning((r) => !r)}
-                >
-                  {timerRunning ? "Pause" : "Start"}
-                </button>
-                <button className="ghost-btn" onClick={resetTimer}>
-                  Reset
-                </button>
-              </div>
-            </div>
-
-            <div className="glass-card">
-              <div className="card-header-row">
-                <span className="card-label">Log Session</span>
-              </div>
-              <div className="form-row">
-                <select
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                >
-                  <option>Physics</option>
-                  <option>Maths</option>
-                  <option>Further Maths</option>
-                  <option>Computer Science</option>
-                  <option>Guitar</option>
-                </select>
-                <input
-                  type="number"
-                  min="5"
-                  step="5"
-                  value={minutes}
-                  onChange={(e) => setMinutes(Number(e.target.value))}
-                />
-                <button className="chip-btn" onClick={handleLog}>
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      function LifeScreen({
-        moneySaved,
-        moneyTarget,
-        addMoney,
-        fitnessLogs,
-        logFitness,
-      }) {
-        const [amount, setAmount] = useState("");
-        const [kind, setKind] = useState("Gym");
-        const [mins, setMins] = useState(30);
-
-        const pct = Math.min(
-          100,
-          Math.round((moneySaved / moneyTarget) * 100)
-        );
-
-        const today = todayISO();
-        const todayLogs = fitnessLogs.filter((f) => f.date === today);
-        const todayMinutes = todayLogs.reduce(
-          (sum, f) => sum + f.minutes,
-          0
-        );
-
-        function handleMoney() {
-          addMoney(amount);
-          setAmount("");
+        const has3D = objects.some((o) => o.dim === 3);
+        const traces = [];
+        const colors = {
+          vector: "#ff6a3d",
+          point: "#1f77b4",
+          line: "#22c55e",
+          plane: "#a855f7",
+        };
+        if (has3D) {
+          objects.forEach((o) => {
+            if (o.type === "vector") {
+              traces.push({
+                type: "scatter3d",
+                mode: "lines+markers",
+                x: [0, o.vector[0]],
+                y: [0, o.vector[1]],
+                z: [0, o.vector[2] || 0],
+                marker: { size: 3, color: colors.vector },
+                line: { width: 6, color: colors.vector },
+                name: o.name,
+              });
+            } else if (o.type === "point") {
+              traces.push({
+                type: "scatter3d",
+                mode: "markers+text",
+                x: [o.point[0]],
+                y: [o.point[1]],
+                z: [o.point[2] || 0],
+                text: [o.name],
+                textposition: "top center",
+                marker: { color: colors.point, size: 5 },
+                name: o.name,
+              });
+            } else if (o.type === "line") {
+              const tVals = Array.from({ length: 30 }, (_, i) => -5 + (10 * i) / 29);
+              const xs = tVals.map((t) => o.point[0] + o.direction[0] * t);
+              const ys = tVals.map((t) => o.point[1] + o.direction[1] * t);
+              const zs = tVals.map((t) => (o.point[2] || 0) + (o.direction[2] || 0) * t);
+              traces.push({
+                type: "scatter3d",
+                mode: "lines",
+                x: xs,
+                y: ys,
+                z: zs,
+                line: { color: colors.line, width: 4 },
+                name: o.name,
+              });
+            } else if (o.type === "plane") {
+              const [d1, d2] = o.directions;
+              const grid = [-3, -1.5, 0, 1.5, 3];
+              const xs = [];
+              const ys = [];
+              const zs = [];
+              grid.forEach((s) => {
+                grid.forEach((t) => {
+                  xs.push(o.point[0] + d1[0] * s + d2[0] * t);
+                  ys.push(o.point[1] + d1[1] * s + d2[1] * t);
+                  zs.push(o.point[2] + d1[2] * s + d2[2] * t);
+                });
+              });
+              traces.push({
+                type: "mesh3d",
+                opacity: 0.5,
+                x: xs,
+                y: ys,
+                z: zs,
+                color: colors.plane,
+                name: o.name,
+              });
+              traces.push({
+                type: "scatter3d",
+                mode: "lines+markers",
+                x: [o.point[0], o.point[0] + o.normal[0]],
+                y: [o.point[1], o.point[1] + o.normal[1]],
+                z: [o.point[2], o.point[2] + o.normal[2]],
+                marker: { size: 2, color: "black" },
+                line: { width: 6, color: "black" },
+                name: `${o.name} normal`,
+                showlegend: false,
+              });
+            }
+          });
+          const layout = {
+            scene: {
+              aspectmode: "cube",
+              xaxis: { title: "x" },
+              yaxis: { title: "y" },
+              zaxis: { title: "z" },
+            },
+            margin: { l: 0, r: 0, b: 0, t: 0 },
+            paper_bgcolor: "#0b1224",
+            plot_bgcolor: "#0b1224",
+          };
+          Plotly.newPlot("plot", traces, layout, { responsive: true });
+          return;
         }
-
-        function handleFitness() {
-          if (!mins || mins <= 0) return;
-          logFitness(kind, mins);
-        }
-
-        return (
-          <div className="screen-content">
-            <h2 className="screen-title">Life Dashboard</h2>
-            <section className="card-row">
-              <div className="glass-card">
-                <div className="card-header-row">
-                  <span className="card-label">Uni / Gear Fund</span>
-                  <span className="card-pill">{pct}%</span>
-                </div>
-                <div className="money-main">
-                  <span>£{moneySaved.toFixed(0)}</span>
-                  <span className="money-sub">
-                    target £{moneyTarget.toFixed(0)}
-                  </span>
-                </div>
-                <ProgressBar
-                  label="Progress"
-                  value={moneySaved}
-                  max={moneyTarget}
-                  hideLabel
-                />
-                <div className="form-row">
-                  <input
-                    type="number"
-                    placeholder="Add amount"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
-                  <button className="chip-btn" onClick={handleMoney}>
-                    + Add
-                  </button>
-                </div>
-              </div>
-
-              <div className="glass-card">
-                <div className="card-header-row">
-                  <span className="card-label">Movement Today</span>
-                  <span className="card-pill">{todayMinutes} min</span>
-                </div>
-                <ProgressBar
-                  label="Goal"
-                  value={todayMinutes}
-                  max={40}
-                  unit="min"
-                />
-                <div className="form-row">
-                  <select
-                    value={kind}
-                    onChange={(e) => setKind(e.target.value)}
-                  >
-                    <option>Gym</option>
-                    <option>Surf</option>
-                    <option>Swim</option>
-                    <option>Run</option>
-                  </select>
-                  <input
-                    type="number"
-                    min="5"
-                    step="5"
-                    value={mins}
-                    onChange={(e) => setMins(Number(e.target.value))}
-                  />
-                  <button className="chip-btn" onClick={handleFitness}>
-                    Log
-                  </button>
-                </div>
-              </div>
-            </section>
-          </div>
-        );
-      }
-
-      function ProgressBar({ label, value, max, unit, hideLabel }) {
-        const pct = Math.min(100, Math.round((value / max) * 100));
-        return (
-          <div className="progress-block">
-            {!hideLabel && (
-              <div className="progress-header">
-                <span>{label}</span>
-                <span className="progress-meta">
-                  {value}
-                  {unit ? " " + unit : ""} / {max}
-                  {unit ? " " + unit : ""}
-                </span>
-              </div>
-            )}
-            <div className="progress-track">
-              <div
-                className="progress-fill"
-                style={{ width: pct + "%" }}
-              />
-            </div>
-          </div>
+        // 2D plot
+        objects.forEach((o) => {
+          if (o.type === "vector") {
+            traces.push({
+              type: "scatter",
+              mode: "lines+markers",
+              x: [0, o.vector[0]],
+              y: [0, o.vector[1]],
+              line: { color: colors.vector, width: 4 },
+              marker: { size: 6, color: colors.vector },
+              name: o.name,
+            });
+          } else if (o.type === "point") {
+            traces.push({
+              type: "scatter",
+              mode: "markers+text",
+              x: [o.point[0]],
+              y: [o.point[1]],
+              text: [o.name],
+              textposition: "top center",
+              marker: { size: 8, color: colors.point },
+              name: o.name,
+            });
+          } else if (o.type === "line") {
+            const tVals = Array.from({ length: 20 }, (_, i) => -5 + (10 * i) / 19);
+            const xs = tVals.map((t) => o.point[0] + o.direction[0] * t);
+            const ys = tVals.map((t) => o.point[1] + o.direction[1] * t);
+            traces.push({
+              type: "scatter",
+              mode: "lines",
+              x: xs,
+              y: ys,
+              line: { color: colors.line, width: 3 },
+              name: o.name,
+            });
+          }
+        });
+        Plotly.newPlot(
+          "plot",
+          traces,
+          {
+            margin: { l: 20, r: 20, b: 30, t: 10 },
+            xaxis: { title: "x", zeroline: true, showgrid: true },
+            yaxis: { title: "y", zeroline: true, showgrid: true },
+            paper_bgcolor: "#0b1224",
+            plot_bgcolor: "#0b1224",
+          },
+          { responsive: true }
         );
       }
 
