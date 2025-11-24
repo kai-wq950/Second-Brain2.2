@@ -2,639 +2,599 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Second Brain OS</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vector Visualiser | A-Level Core Pure</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.164.1/examples/js/controls/OrbitControls.min.js"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Core Pure 1 & 2 Companion</p>
+          <h1>2D + 3D Vector Visualiser</h1>
+          <p class="lede">
+            Plot vectors, points, lines, and planes from any exam-friendly form.
+            Run algebraic operations (add, subtract, reflect) and geometric
+            checks (intersections, distances) with immediate visuals.
+          </p>
+        </div>
+        <div class="tag">Built for quick revision</div>
+      </header>
 
-    <!-- React + ReactDOM -->
-    <script
-      crossorigin
-      src="https://unpkg.com/react@18/umd/react.development.js"
-    ></script>
-    <script
-      crossorigin
-      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
-    ></script>
-
-    <!-- Babel (so we can use JSX inline) -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- APP CODE INLINE = no CORS issues -->
-    <script type="text/babel">
-      const { useState, useEffect, useMemo } = React;
-
-      function todayISO() {
-        const d = new Date();
-        d.setHours(0, 0, 0, 0);
-        return d.toISOString().slice(0, 10);
-      }
-
-      function App() {
-        const [activeTab, setActiveTab] = useState("home");
-        const [tasks, setTasks] = useState([
-          {
-            id: 1,
-            title: "Finish physics questions",
-            tag: "Study",
-            due: todayISO(),
-            done: false,
-          },
-          {
-            id: 2,
-            title: "Guitar practice 20 min",
-            tag: "Guitar",
-            due: todayISO(),
-            done: false,
-          },
-          {
-            id: 3,
-            title: "Gym session",
-            tag: "Fitness",
-            due: todayISO(),
-            done: false,
-          },
-        ]);
-        const [quickText, setQuickText] = useState("");
-        const [studySessions, setStudySessions] = useState([]);
-        const [fitnessLogs, setFitnessLogs] = useState([]);
-        const [moneySaved, setMoneySaved] = useState(350);
-        const [moneyTarget] = useState(2000);
-        const [timerSeconds, setTimerSeconds] = useState(25 * 60);
-        const [timerRunning, setTimerRunning] = useState(false);
-        const [menuOpen, setMenuOpen] = useState(false);
-
-        useEffect(() => {
-          if (!timerRunning) return;
-          const id = setInterval(() => {
-            setTimerSeconds((prev) => (prev > 0 ? prev - 1 : 0));
-          }, 1000);
-          return () => clearInterval(id);
-        }, [timerRunning]);
-
-        const tasksToday = useMemo(
-          () => tasks.filter((t) => t.due === todayISO()),
-          [tasks]
-        );
-
-        const studyMinutesToday = useMemo(
-          () =>
-            studySessions
-              .filter((s) => s.date === todayISO())
-              .reduce((sum, s) => sum + s.minutes, 0),
-          [studySessions]
-        );
-
-        const fitnessMinutesToday = useMemo(
-          () =>
-            fitnessLogs
-              .filter((f) => f.date === todayISO())
-              .reduce((sum, f) => sum + f.minutes, 0),
-          [fitnessLogs]
-        );
-
-        function toggleTask(id) {
-          setTasks((prev) =>
-            prev.map((t) =>
-              t.id === id ? { ...t, done: !t.done } : t
-            )
-          );
-        }
-
-        function addQuickTask() {
-          const text = quickText.trim();
-          if (!text) return;
-          setTasks((prev) => [
-            ...prev,
-            {
-              id: Date.now(),
-              title: text,
-              tag: "Inbox",
-              due: todayISO(),
-              done: false,
-            },
-          ]);
-          setQuickText("");
-        }
-
-        function resetTimer() {
-          setTimerSeconds(25 * 60);
-          setTimerRunning(false);
-        }
-
-        function logStudy(subject, minutes) {
-          setStudySessions((prev) => [
-            ...prev,
-            { id: Date.now(), subject, minutes, date: todayISO() },
-          ]);
-        }
-
-        function logFitness(kind, minutes) {
-          setFitnessLogs((prev) => [
-            ...prev,
-            { id: Date.now(), kind, minutes, date: todayISO() },
-          ]);
-        }
-
-        function addMoney(amount) {
-          const value = Number(amount);
-          if (!value || value <= 0) return;
-          setMoneySaved((prev) => prev + value);
-        }
-
-        const screenProps = {
-          tasks,
-          tasksToday,
-          toggleTask,
-          quickText,
-          setQuickText,
-          addQuickTask,
-          timerSeconds,
-          timerRunning,
-          setTimerRunning,
-          resetTimer,
-          studyMinutesToday,
-          fitnessMinutesToday,
-          logStudy,
-          logFitness,
-          moneySaved,
-          moneyTarget,
-          addMoney,
-          studySessions,
-          fitnessLogs,
-        };
-
-        return (
-          <div className="app-bg">
-            <div className="gradient-orb gradient-orb--left" />
-            <div className="gradient-orb gradient-orb--right" />
-            <div className="phone-frame">
-              <TopBar onMenuToggle={() => setMenuOpen((m) => !m)} />
-              <div key={activeTab} className="screen">
-                {activeTab === "home" && <HomeScreen {...screenProps} />}
-                {activeTab === "tasks" && <TasksScreen {...screenProps} />}
-                {activeTab === "focus" && <FocusScreen {...screenProps} />}
-                {activeTab === "life" && <LifeScreen {...screenProps} />}
-              </div>
-              <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-              {menuOpen && (
-                <GlassMenu onClose={() => setMenuOpen(false)} />
-              )}
+      <main class="grid">
+        <section class="panel wide">
+          <h2>Create objects</h2>
+          <form id="object-form" class="form">
+            <div class="form-row">
+              <label>Object label</label>
+              <input id="label" required placeholder="u, L1, plane π …" />
             </div>
+            <div class="form-row">
+              <label>Type</label>
+              <select id="type">
+                <option value="vector">Vector</option>
+                <option value="point">Point</option>
+                <option value="line">Line</option>
+                <option value="plane">Plane</option>
+              </select>
+            </div>
+
+            <div id="vector-fields" class="form-grid">
+              <label>Components (x, y, z)</label>
+              <div class="triple-input">
+                <input id="vx" type="number" step="any" placeholder="1" />
+                <input id="vy" type="number" step="any" placeholder="2" />
+                <input id="vz" type="number" step="any" placeholder="3" />
+              </div>
+            </div>
+
+            <div id="point-fields" class="form-grid hidden">
+              <label>Coordinates (x, y, z)</label>
+              <div class="triple-input">
+                <input id="px" type="number" step="any" placeholder="0" />
+                <input id="py" type="number" step="any" placeholder="0" />
+                <input id="pz" type="number" step="any" placeholder="0" />
+              </div>
+            </div>
+
+            <div id="line-fields" class="hidden">
+              <p class="small-label">Use either two points or point + direction.</p>
+              <div class="form-grid">
+                <label>Point A (x, y, z)</label>
+                <div class="triple-input">
+                  <input id="lax" type="number" step="any" placeholder="0" />
+                  <input id="lay" type="number" step="any" placeholder="0" />
+                  <input id="laz" type="number" step="any" placeholder="0" />
+                </div>
+              </div>
+              <div class="form-grid">
+                <label>Point B (x, y, z)</label>
+                <div class="triple-input">
+                  <input id="lbx" type="number" step="any" placeholder="1" />
+                  <input id="lby" type="number" step="any" placeholder="1" />
+                  <input id="lbz" type="number" step="any" placeholder="1" />
+                </div>
+              </div>
+              <div class="form-grid">
+                <label>Direction (dx, dy, dz)</label>
+                <div class="triple-input">
+                  <input id="ldx" type="number" step="any" placeholder="1" />
+                  <input id="ldy" type="number" step="any" placeholder="0" />
+                  <input id="ldz" type="number" step="any" placeholder="0" />
+                </div>
+              </div>
+            </div>
+
+            <div id="plane-fields" class="hidden">
+              <p class="small-label">Point + normal OR scalar form ax + by + cz = d</p>
+              <div class="form-grid">
+                <label>Point (x, y, z)</label>
+                <div class="triple-input">
+                  <input id="ppx" type="number" step="any" placeholder="0" />
+                  <input id="ppy" type="number" step="any" placeholder="0" />
+                  <input id="ppz" type="number" step="any" placeholder="0" />
+                </div>
+              </div>
+              <div class="form-grid">
+                <label>Normal (nx, ny, nz)</label>
+                <div class="triple-input">
+                  <input id="pnx" type="number" step="any" placeholder="0" />
+                  <input id="pny" type="number" step="any" placeholder="1" />
+                  <input id="pnz" type="number" step="any" placeholder="0" />
+                </div>
+              </div>
+              <div class="form-grid">
+                <label>Scalar form</label>
+                <div class="quad-input">
+                  <input id="a" type="number" step="any" placeholder="a" />
+                  <input id="b" type="number" step="any" placeholder="b" />
+                  <input id="c" type="number" step="any" placeholder="c" />
+                  <input id="d" type="number" step="any" placeholder="d" />
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" class="primary">Add to scene</button>
+          </form>
+
+          <div class="object-list" id="object-list"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Operations</h2>
+          <div class="form">
+            <div class="form-row">
+              <label>Operation</label>
+              <select id="op-type">
+                <option value="add">Vector addition</option>
+                <option value="subtract">Vector subtraction</option>
+                <option value="dot">Dot product</option>
+                <option value="cross">Cross product</option>
+                <option value="reflect-point">Reflect point in plane</option>
+                <option value="reflect-vector">Reflect vector in plane</option>
+                <option value="line-plane">Line / plane intersection</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>First object</label>
+              <select id="op-a"></select>
+            </div>
+            <div class="form-row">
+              <label>Second object</label>
+              <select id="op-b"></select>
+            </div>
+            <button id="run-op" class="primary secondary">Run</button>
           </div>
-        );
+          <div id="op-result" class="result-box">Results will appear here.</div>
+        </section>
+
+        <section class="panel wide">
+          <div class="viewer-header">
+            <h2>3D workspace</h2>
+            <span class="muted">Drag to orbit · Scroll to zoom</span>
+          </div>
+          <div id="three-container" class="viewer"></div>
+        </section>
+
+        <section class="panel wide">
+          <div class="viewer-header">
+            <h2>2D projection (xy-plane)</h2>
+            <span class="muted">Arrows from origin; lines/planes projected.</span>
+          </div>
+          <canvas id="canvas-2d" class="viewer"></canvas>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const objects = [];
+      const colors = {
+        vector: '#5B8DEF',
+        point: '#10B981',
+        line: '#F59E0B',
+        plane: '#EC4899',
+      };
+
+      function showFields(type) {
+        document.querySelector('#vector-fields').classList.toggle('hidden', type !== 'vector');
+        document.querySelector('#point-fields').classList.toggle('hidden', type !== 'point');
+        document.querySelector('#line-fields').classList.toggle('hidden', type !== 'line');
+        document.querySelector('#plane-fields').classList.toggle('hidden', type !== 'plane');
       }
 
-      function TopBar({ onMenuToggle }) {
-        const now = new Date();
-        const time = now.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
+      document.querySelector('#type').addEventListener('change', (e) => {
+        showFields(e.target.value);
+      });
+
+      // Utilities
+      const vec = (x, y, z) => ({ x: Number(x) || 0, y: Number(y) || 0, z: Number(z) || 0 });
+      const addVec = (a, b) => vec(a.x + b.x, a.y + b.y, a.z + b.z);
+      const subVec = (a, b) => vec(a.x - b.x, a.y - b.y, a.z - b.z);
+      const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+      const cross = (a, b) =>
+        vec(
+          a.y * b.z - a.z * b.y,
+          a.z * b.x - a.x * b.z,
+          a.x * b.y - a.y * b.x
+        );
+      const norm = (v) => Math.sqrt(dot(v, v));
+      const normalised = (v) => {
+        const n = norm(v);
+        if (n === 0) return vec(0, 0, 0);
+        return vec(v.x / n, v.y / n, v.z / n);
+      };
+
+      function formatVec(v) {
+        return `(${v.x.toFixed(2)}, ${v.y.toFixed(2)}, ${v.z.toFixed(2)})`;
+      }
+
+      function planeFromScalar(a, b, c, d) {
+        if ([a, b, c].every((n) => !n)) return null;
+        const n = vec(a, b, c);
+        let point;
+        if (c) point = vec(0, 0, d / c);
+        else if (b) point = vec(0, d / b, 0);
+        else point = vec(d / a, 0, 0);
+        return { point, normal: n };
+      }
+
+      // Form submission
+      document.querySelector('#object-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const label = document.querySelector('#label').value.trim();
+        if (!label) return;
+        const type = document.querySelector('#type').value;
+        let obj;
+
+        if (type === 'vector') {
+          const v = vec(document.querySelector('#vx').value, document.querySelector('#vy').value, document.querySelector('#vz').value);
+          obj = { id: crypto.randomUUID(), label, type, data: { v } };
+        }
+
+        if (type === 'point') {
+          const p = vec(document.querySelector('#px').value, document.querySelector('#py').value, document.querySelector('#pz').value);
+          obj = { id: crypto.randomUUID(), label, type, data: { p } };
+        }
+
+        if (type === 'line') {
+          const a = vec(document.querySelector('#lax').value, document.querySelector('#lay').value, document.querySelector('#laz').value);
+          const b = vec(document.querySelector('#lbx').value, document.querySelector('#lby').value, document.querySelector('#lbz').value);
+          const directionInput = vec(document.querySelector('#ldx').value, document.querySelector('#ldy').value, document.querySelector('#ldz').value);
+          const dir = norm(directionInput) ? directionInput : subVec(b, a);
+          obj = { id: crypto.randomUUID(), label, type, data: { point: a, dir } };
+        }
+
+        if (type === 'plane') {
+          const point = vec(document.querySelector('#ppx').value, document.querySelector('#ppy').value, document.querySelector('#ppz').value);
+          const normalInput = vec(document.querySelector('#pnx').value, document.querySelector('#pny').value, document.querySelector('#pnz').value);
+          const a = Number(document.querySelector('#a').value);
+          const b = Number(document.querySelector('#b').value);
+          const c = Number(document.querySelector('#c').value);
+          const d = Number(document.querySelector('#d').value);
+          let normal = norm(normalInput) ? normalInput : null;
+          let p = point;
+          if (!normal && [a, b, c, d].some((n) => !Number.isNaN(n))) {
+            const scalar = planeFromScalar(a, b, c, d);
+            if (scalar) {
+              p = scalar.point;
+              normal = scalar.normal;
+            }
+          }
+          if (!normal) return alert('Provide either a normal or scalar form.');
+          obj = { id: crypto.randomUUID(), label, type, data: { point: p, normal } };
+        }
+
+        objects.push(obj);
+        document.querySelector('#object-form').reset();
+        showFields('vector');
+        updateObjectList();
+        populateSelectors();
+        renderScene();
+        render2D();
+      });
+
+      function updateObjectList() {
+        const list = document.querySelector('#object-list');
+        list.innerHTML = '';
+        if (!objects.length) {
+          list.innerHTML = '<p class="muted">No objects yet. Add one above.</p>';
+          return;
+        }
+        objects.forEach((o) => {
+          const item = document.createElement('div');
+          item.className = 'pill';
+          item.innerHTML = `<span class="dot" style="background:${colors[o.type]}"></span><strong>${o.label}</strong> · ${describe(o)}`;
+          list.appendChild(item);
         });
-        const date = now.toLocaleDateString([], {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
+      }
+
+      function describe(o) {
+        if (o.type === 'vector') return `v = ${formatVec(o.data.v)}`;
+        if (o.type === 'point') return `P ${formatVec(o.data.p)}`;
+        if (o.type === 'line') return `r = ${formatVec(o.data.point)} + t${formatVec(o.data.dir)}`;
+        if (o.type === 'plane') return `n = ${formatVec(o.data.normal)}, through ${formatVec(o.data.point)}`;
+        return '';
+      }
+
+      function populateSelectors() {
+        const opA = document.querySelector('#op-a');
+        const opB = document.querySelector('#op-b');
+        [opA, opB].forEach((sel) => {
+          sel.innerHTML = '';
+          objects.forEach((o) => {
+            const option = document.createElement('option');
+            option.value = o.id;
+            option.textContent = `${o.label} (${o.type})`;
+            sel.appendChild(option);
+          });
         });
-
-        return (
-          <header className="topbar">
-            <div className="topbar-left">
-              <div className="avatar">K</div>
-              <div>
-                <div className="topbar-title">Second Brain</div>
-                <div className="topbar-sub">Kai · Personal OS</div>
-              </div>
-            </div>
-            <div className="topbar-right">
-              <div className="chip">
-                <span>{time}</span>
-                <span className="chip-dot">•</span>
-                <span>{date}</span>
-              </div>
-              <button className="icon-btn" onClick={onMenuToggle}>
-                ⋯
-              </button>
-            </div>
-          </header>
-        );
       }
 
-      function BottomNav({ activeTab, setActiveTab }) {
-        const links = [
-          { id: "home", icon: "⌂", label: "Home" },
-          { id: "tasks", icon: "✓", label: "Tasks" },
-          { id: "focus", icon: "⏱", label: "Focus" },
-          { id: "life", icon: "◎", label: "Life" },
-        ];
-        return (
-          <nav className="bottom-nav">
-            {links.map((link) => (
-              <button
-                key={link.id}
-                className={
-                  "bottom-nav-item" +
-                  (activeTab === link.id ? " bottom-nav-item--active" : "")
-                }
-                onClick={() => setActiveTab(link.id)}
-              >
-                <span className="bottom-nav-icon">{link.icon}</span>
-                <span className="bottom-nav-label">{link.label}</span>
-              </button>
-            ))}
-          </nav>
-        );
-      }
+      document.querySelector('#run-op').addEventListener('click', () => {
+        const op = document.querySelector('#op-type').value;
+        const a = objects.find((o) => o.id === document.querySelector('#op-a').value);
+        const b = objects.find((o) => o.id === document.querySelector('#op-b').value);
+        const resultBox = document.querySelector('#op-result');
+        if (!a || !b) return alert('Pick two objects.');
 
-      function GlassMenu({ onClose }) {
-        return (
-          <div className="menu-overlay" onClick={onClose}>
-            <div
-              className="menu-panel"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="menu-row">
-                <span>Check timetable</span>
-              </div>
-              <div className="menu-row">
-                <span>Mark study session</span>
-              </div>
-              <div className="menu-row">
-                <span>Open settings</span>
-              </div>
-              <div className="menu-row menu-row--danger">
-                <span>Clear local data</span>
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      /* ---------- SCREENS ---------- */
-
-      function HomeScreen({
-        tasksToday,
-        toggleTask,
-        quickText,
-        setQuickText,
-        addQuickTask,
-        studyMinutesToday,
-        fitnessMinutesToday,
-        timerSeconds,
-      }) {
-        const min = String(Math.floor(timerSeconds / 60)).padStart(2, "0");
-        const sec = String(timerSeconds % 60).padStart(2, "0");
-
-        const now = new Date();
-        const hours = String(now.getHours()).padStart(2, "0");
-        const minutes = String(now.getMinutes()).padStart(2, "0");
-
-        return (
-          <div className="screen-content">
-            <section className="hero-card">
-              <div className="hero-time-main">
-                <span className="hero-time-hours">{hours}</span>
-                <span className="hero-time-separator">:</span>
-                <span className="hero-time-minutes">{minutes}</span>
-              </div>
-              <div className="hero-time-sub">
-                <span>Home</span>
-                <span className="hero-dot">•</span>
-                <span>Focus ready</span>
-              </div>
-              <div className="hero-footer">
-                <span>Next block</span>
-                <span>
-                  {min}:{sec}
-                </span>
-              </div>
-            </section>
-
-            <section className="card-row">
-              <div className="glass-card">
-                <div className="card-header-row">
-                  <span className="card-label">Today’s Tasks</span>
-                  <span className="card-pill">
-                    {tasksToday.filter((t) => t.done).length}/
-                    {tasksToday.length}
-                  </span>
-                </div>
-                <div className="task-list">
-                  {tasksToday.length === 0 && (
-                    <div className="empty-text">
-                      Nothing due. Pull something forward.
-                    </div>
-                  )}
-                  {tasksToday.map((t) => (
-                    <button
-                      key={t.id}
-                      className={
-                        "task-pill" + (t.done ? " task-pill--done" : "")
-                      }
-                      onClick={() => toggleTask(t.id)}
-                    >
-                      <span className="task-check">
-                        {t.done ? "✓" : ""}
-                      </span>
-                      <span className="task-title">{t.title}</span>
-                      <span className="task-tag">{t.tag}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="glass-card">
-                <div className="card-header-row">
-                  <span className="card-label">Daily Goals</span>
-                </div>
-                <ProgressBar
-                  label="Study"
-                  value={studyMinutesToday}
-                  max={120}
-                  unit="min"
-                />
-                <ProgressBar
-                  label="Movement"
-                  value={fitnessMinutesToday}
-                  max={40}
-                  unit="min"
-                />
-              </div>
-            </section>
-
-            <section className="glass-card">
-              <div className="card-header-row">
-                <span className="card-label">Quick Capture</span>
-              </div>
-              <div className="quick-row">
-                <input
-                  className="quick-input"
-                  placeholder="Type and hit Enter to turn this into a task…"
-                  value={quickText}
-                  onChange={(e) => setQuickText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") addQuickTask();
-                  }}
-                />
-                <button className="chip-btn" onClick={addQuickTask}>
-                  Add
-                </button>
-              </div>
-            </section>
-          </div>
-        );
-      }
-
-      function TasksScreen({ tasks, toggleTask }) {
-        return (
-          <div className="screen-content">
-            <h2 className="screen-title">Tasks &amp; Projects</h2>
-            <div className="glass-card">
-              <div className="card-header-row">
-                <span className="card-label">All Tasks</span>
-              </div>
-              <div className="task-list task-list--column">
-                {tasks.map((t) => (
-                  <button
-                    key={t.id}
-                    className={
-                      "task-pill task-pill--wide" +
-                      (t.done ? " task-pill--done" : "")
-                    }
-                    onClick={() => toggleTask(t.id)}
-                  >
-                    <span className="task-check">
-                      {t.done ? "✓" : ""}
-                    </span>
-                    <div className="task-main">
-                      <span className="task-title">{t.title}</span>
-                      <span className="task-meta">
-                        {t.tag} · due {t.due}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-                {tasks.length === 0 && (
-                  <div className="empty-text">
-                    No tasks yet. Add some on the Home screen.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      function FocusScreen({
-        timerSeconds,
-        timerRunning,
-        setTimerRunning,
-        resetTimer,
-        logStudy,
-      }) {
-        const min = String(Math.floor(timerSeconds / 60)).padStart(2, "0");
-        const sec = String(timerSeconds % 60).padStart(2, "0");
-        const [subject, setSubject] = useState("Physics");
-        const [minutes, setMinutes] = useState(25);
-
-        function handleLog() {
-          if (!minutes || minutes <= 0) return;
-          logStudy(subject, minutes);
+        function requireType(obj, type, name) {
+          if (obj.type !== type) throw `${name} must be a ${type}.`;
         }
 
-        return (
-          <div className="screen-content">
-            <h2 className="screen-title">Focus Mode</h2>
-            <div className="hero-card hero-card--focus">
-              <div className="focus-time">
-                {min}:{sec}
-              </div>
-              <div className="focus-sub">Pomodoro · 25 min</div>
-              <div className="focus-actions">
-                <button
-                  className="primary-btn"
-                  onClick={() => setTimerRunning((r) => !r)}
-                >
-                  {timerRunning ? "Pause" : "Start"}
-                </button>
-                <button className="ghost-btn" onClick={resetTimer}>
-                  Reset
-                </button>
-              </div>
-            </div>
+        try {
+          if (op === 'add') {
+            requireType(a, 'vector', 'First object');
+            requireType(b, 'vector', 'Second object');
+            const res = addVec(a.data.v, b.data.v);
+            objects.push({ id: crypto.randomUUID(), label: `${a.label}+${b.label}`, type: 'vector', data: { v: res } });
+            resultBox.textContent = `Sum = ${formatVec(res)}`;
+          }
 
-            <div className="glass-card">
-              <div className="card-header-row">
-                <span className="card-label">Log Session</span>
-              </div>
-              <div className="form-row">
-                <select
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                >
-                  <option>Physics</option>
-                  <option>Maths</option>
-                  <option>Further Maths</option>
-                  <option>Computer Science</option>
-                  <option>Guitar</option>
-                </select>
-                <input
-                  type="number"
-                  min="5"
-                  step="5"
-                  value={minutes}
-                  onChange={(e) => setMinutes(Number(e.target.value))}
-                />
-                <button className="chip-btn" onClick={handleLog}>
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      }
+          if (op === 'subtract') {
+            requireType(a, 'vector', 'First object');
+            requireType(b, 'vector', 'Second object');
+            const res = subVec(a.data.v, b.data.v);
+            objects.push({ id: crypto.randomUUID(), label: `${a.label}-${b.label}`, type: 'vector', data: { v: res } });
+            resultBox.textContent = `Difference = ${formatVec(res)}`;
+          }
 
-      function LifeScreen({
-        moneySaved,
-        moneyTarget,
-        addMoney,
-        fitnessLogs,
-        logFitness,
-      }) {
-        const [amount, setAmount] = useState("");
-        const [kind, setKind] = useState("Gym");
-        const [mins, setMins] = useState(30);
+          if (op === 'dot') {
+            requireType(a, 'vector', 'First object');
+            requireType(b, 'vector', 'Second object');
+            const res = dot(a.data.v, b.data.v);
+            resultBox.textContent = `Dot product = ${res.toFixed(3)}`;
+          }
 
-        const pct = Math.min(
-          100,
-          Math.round((moneySaved / moneyTarget) * 100)
-        );
+          if (op === 'cross') {
+            requireType(a, 'vector', 'First object');
+            requireType(b, 'vector', 'Second object');
+            const res = cross(a.data.v, b.data.v);
+            objects.push({ id: crypto.randomUUID(), label: `${a.label}×${b.label}`, type: 'vector', data: { v: res } });
+            resultBox.textContent = `Cross product = ${formatVec(res)}`;
+          }
 
-        const today = todayISO();
-        const todayLogs = fitnessLogs.filter((f) => f.date === today);
-        const todayMinutes = todayLogs.reduce(
-          (sum, f) => sum + f.minutes,
-          0
-        );
+          if (op === 'reflect-point') {
+            requireType(a, 'point', 'First object');
+            requireType(b, 'plane', 'Second object');
+            const nHat = normalised(b.data.normal);
+            const diff = subVec(a.data.p, b.data.point);
+            const dist = dot(diff, nHat);
+            const reflected = subVec(a.data.p, vec(2 * dist * nHat.x, 2 * dist * nHat.y, 2 * dist * nHat.z));
+            objects.push({ id: crypto.randomUUID(), label: `${a.label}'`, type: 'point', data: { p: reflected } });
+            resultBox.textContent = `Reflected point = ${formatVec(reflected)}`;
+          }
 
-        function handleMoney() {
-          addMoney(amount);
-          setAmount("");
+          if (op === 'reflect-vector') {
+            requireType(a, 'vector', 'First object');
+            requireType(b, 'plane', 'Second object');
+            const nHat = normalised(b.data.normal);
+            const scale = 2 * dot(a.data.v, nHat);
+            const reflected = subVec(a.data.v, vec(scale * nHat.x, scale * nHat.y, scale * nHat.z));
+            objects.push({ id: crypto.randomUUID(), label: `${a.label} refl`, type: 'vector', data: { v: reflected } });
+            resultBox.textContent = `Reflected vector = ${formatVec(reflected)}`;
+          }
+
+          if (op === 'line-plane') {
+            requireType(a, 'line', 'First object');
+            requireType(b, 'plane', 'Second object');
+            const n = b.data.normal;
+            const denom = dot(n, a.data.dir);
+            if (Math.abs(denom) < 1e-6) {
+              resultBox.textContent = 'Line is parallel to the plane (no unique intersection).';
+            } else {
+              const t = dot(subVec(b.data.point, a.data.point), n) / denom;
+              const inter = addVec(a.data.point, vec(t * a.data.dir.x, t * a.data.dir.y, t * a.data.dir.z));
+              objects.push({ id: crypto.randomUUID(), label: `${a.label}∩${b.label}`, type: 'point', data: { p: inter } });
+              resultBox.textContent = `Intersection point = ${formatVec(inter)}`;
+            }
+          }
+        } catch (err) {
+          alert(err);
+          return;
         }
 
-        function handleFitness() {
-          if (!mins || mins <= 0) return;
-          logFitness(kind, mins);
+        updateObjectList();
+        populateSelectors();
+        renderScene();
+        render2D();
+      });
+
+      // 3D Scene setup
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color('#0b1224');
+      const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+      camera.position.set(6, 6, 8);
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(800, 500);
+      document.querySelector('#three-container').appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 0, 0);
+      controls.update();
+
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(3, 5, 2);
+      scene.add(light);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+      scene.add(new THREE.AxesHelper(3));
+
+      function clearScene() {
+        while (scene.children.length > 4) {
+          const child = scene.children.pop();
+          child.geometry?.dispose?.();
+          child.material?.dispose?.();
         }
-
-        return (
-          <div className="screen-content">
-            <h2 className="screen-title">Life Dashboard</h2>
-            <section className="card-row">
-              <div className="glass-card">
-                <div className="card-header-row">
-                  <span className="card-label">Uni / Gear Fund</span>
-                  <span className="card-pill">{pct}%</span>
-                </div>
-                <div className="money-main">
-                  <span>£{moneySaved.toFixed(0)}</span>
-                  <span className="money-sub">
-                    target £{moneyTarget.toFixed(0)}
-                  </span>
-                </div>
-                <ProgressBar
-                  label="Progress"
-                  value={moneySaved}
-                  max={moneyTarget}
-                  hideLabel
-                />
-                <div className="form-row">
-                  <input
-                    type="number"
-                    placeholder="Add amount"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
-                  <button className="chip-btn" onClick={handleMoney}>
-                    + Add
-                  </button>
-                </div>
-              </div>
-
-              <div className="glass-card">
-                <div className="card-header-row">
-                  <span className="card-label">Movement Today</span>
-                  <span className="card-pill">{todayMinutes} min</span>
-                </div>
-                <ProgressBar
-                  label="Goal"
-                  value={todayMinutes}
-                  max={40}
-                  unit="min"
-                />
-                <div className="form-row">
-                  <select
-                    value={kind}
-                    onChange={(e) => setKind(e.target.value)}
-                  >
-                    <option>Gym</option>
-                    <option>Surf</option>
-                    <option>Swim</option>
-                    <option>Run</option>
-                  </select>
-                  <input
-                    type="number"
-                    min="5"
-                    step="5"
-                    value={mins}
-                    onChange={(e) => setMins(Number(e.target.value))}
-                  />
-                  <button className="chip-btn" onClick={handleFitness}>
-                    Log
-                  </button>
-                </div>
-              </div>
-            </section>
-          </div>
-        );
       }
 
-      function ProgressBar({ label, value, max, unit, hideLabel }) {
-        const pct = Math.min(100, Math.round((value / max) * 100));
-        return (
-          <div className="progress-block">
-            {!hideLabel && (
-              <div className="progress-header">
-                <span>{label}</span>
-                <span className="progress-meta">
-                  {value}
-                  {unit ? " " + unit : ""} / {max}
-                  {unit ? " " + unit : ""}
-                </span>
-              </div>
-            )}
-            <div className="progress-track">
-              <div
-                className="progress-fill"
-                style={{ width: pct + "%" }}
-              />
-            </div>
-          </div>
+      function renderScene() {
+        clearScene();
+        objects.forEach((o) => {
+          if (o.type === 'vector') addVector(o);
+          if (o.type === 'point') addPoint(o);
+          if (o.type === 'line') addLine(o);
+          if (o.type === 'plane') addPlane(o);
+        });
+        renderer.setSize(
+          document.querySelector('#three-container').clientWidth,
+          500
         );
+        renderer.render(scene, camera);
       }
 
-      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+      function addVector(o) {
+        const dir = new THREE.Vector3(o.data.v.x, o.data.v.y, o.data.v.z);
+        const arrow = new THREE.ArrowHelper(dir.clone().normalize(), new THREE.Vector3(0, 0, 0), dir.length(), colors.vector);
+        scene.add(arrow);
+      }
+
+      function addPoint(o) {
+        const geo = new THREE.SphereGeometry(0.08, 16, 16);
+        const mat = new THREE.MeshStandardMaterial({ color: colors.point, emissive: colors.point });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(o.data.p.x, o.data.p.y, o.data.p.z);
+        scene.add(mesh);
+      }
+
+      function addLine(o) {
+        const p0 = new THREE.Vector3(o.data.point.x, o.data.point.y, o.data.point.z);
+        const dir = new THREE.Vector3(o.data.dir.x, o.data.dir.y, o.data.dir.z).normalize();
+        const len = 10;
+        const p1 = p0.clone().add(dir.clone().multiplyScalar(len));
+        const p2 = p0.clone().add(dir.clone().multiplyScalar(-len));
+        const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+        const material = new THREE.LineBasicMaterial({ color: colors.line });
+        const line = new THREE.Line(geometry, material);
+        scene.add(line);
+      }
+
+      function addPlane(o) {
+        const size = 10;
+        const geometry = new THREE.PlaneGeometry(size, size);
+        const material = new THREE.MeshStandardMaterial({
+          color: colors.plane,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.15,
+        });
+        const plane = new THREE.Mesh(geometry, material);
+        const normal = new THREE.Vector3(o.data.normal.x, o.data.normal.y, o.data.normal.z).normalize();
+        const point = new THREE.Vector3(o.data.point.x, o.data.point.y, o.data.point.z);
+
+        const quaternion = new THREE.Quaternion();
+        quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+        plane.applyQuaternion(quaternion);
+        plane.position.copy(point);
+        scene.add(plane);
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // 2D canvas rendering
+      const canvas = document.querySelector('#canvas-2d');
+      const ctx = canvas.getContext('2d');
+      function resizeCanvas() {
+        canvas.width = canvas.clientWidth * window.devicePixelRatio;
+        canvas.height = 400 * window.devicePixelRatio;
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+      }
+      resizeCanvas();
+
+      function render2D() {
+        ctx.save();
+        ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const w = canvas.clientWidth;
+        const h = 400;
+        const origin = { x: w / 2, y: h / 2 };
+        const scale = 30;
+
+        ctx.strokeStyle = '#22304d';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, origin.y);
+        ctx.lineTo(w, origin.y);
+        ctx.moveTo(origin.x, 0);
+        ctx.lineTo(origin.x, h);
+        ctx.stroke();
+
+        objects.forEach((o) => {
+          if (o.type === 'vector') {
+            const end = { x: origin.x + o.data.v.x * scale, y: origin.y - o.data.v.y * scale };
+            drawArrow(origin, end, colors.vector);
+          }
+          if (o.type === 'point') {
+            const pos = { x: origin.x + o.data.p.x * scale, y: origin.y - o.data.p.y * scale };
+            ctx.fillStyle = colors.point;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          if (o.type === 'line') {
+            const dir = normalised(o.data.dir);
+            const p = o.data.point;
+            const p1 = { x: origin.x + (p.x - dir.x * 100) * scale, y: origin.y - (p.y - dir.y * 100) * scale };
+            const p2 = { x: origin.x + (p.x + dir.x * 100) * scale, y: origin.y - (p.y + dir.y * 100) * scale };
+            ctx.strokeStyle = colors.line;
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+          }
+          if (o.type === 'plane') {
+            const n = o.data.normal;
+            const p = o.data.point;
+            // projection onto xy-plane -> line representation
+            if (Math.abs(n.z) > 1e-6) {
+              const d = dot(n, p);
+              const intercept = (d - n.x * (-5) - n.y * (-5)) / n.z;
+              ctx.strokeStyle = colors.plane;
+              ctx.globalAlpha = 0.4;
+              ctx.beginPath();
+              ctx.rect(origin.x - 150, origin.y - 150, 300, 300);
+              ctx.stroke();
+              ctx.globalAlpha = 1;
+            }
+          }
+        });
+        ctx.restore();
+      }
+
+      function drawArrow(from, to, color) {
+        const headLength = 10;
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const angle = Math.atan2(dy, dx);
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(to.x, to.y);
+        ctx.lineTo(to.x - headLength * Math.cos(angle - Math.PI / 6), to.y - headLength * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(to.x - headLength * Math.cos(angle + Math.PI / 6), to.y - headLength * Math.sin(angle + Math.PI / 6));
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      window.addEventListener('resize', () => {
+        resizeCanvas();
+        render2D();
+        renderScene();
+      });
+
+      updateObjectList();
+      populateSelectors();
+      renderScene();
+      render2D();
     </script>
   </body>
 </html>
